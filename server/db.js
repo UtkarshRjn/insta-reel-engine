@@ -43,6 +43,12 @@ db.exec(`
     expires_at INTEGER,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 // --- Ideas Queue ---
@@ -166,6 +172,32 @@ export function saveToken({ instagramAccountId, accessToken, pageAccessToken, us
 
 export function getToken() {
   return stmtGetToken.get() || null;
+}
+
+// --- Settings (reference image, etc.) ---
+
+const stmtGetSetting = db.prepare(`SELECT value FROM settings WHERE key = ?`);
+const stmtSaveSetting = db.prepare(`
+  INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
+`);
+
+// Seed ref image from env if DB is empty
+const existingRef = stmtGetSetting.get('ref_image_url');
+if ((!existingRef || !existingRef.value) && process.env.CHARACTER_REF_IMAGE_URL) {
+  stmtSaveSetting.run('ref_image_url', process.env.CHARACTER_REF_IMAGE_URL);
+  stmtSaveSetting.run('ref_image_name', 'character-ref.png');
+}
+
+export function getRefImage() {
+  const url = stmtGetSetting.get('ref_image_url');
+  const name = stmtGetSetting.get('ref_image_name');
+  if (!url || !url.value) return null;
+  return { url: url.value, name: name?.value || 'character-ref.png' };
+}
+
+export function saveRefImage(url, name) {
+  stmtSaveSetting.run('ref_image_url', url);
+  stmtSaveSetting.run('ref_image_name', name);
 }
 
 export default db;

@@ -85,7 +85,8 @@ function IdeaQueue() {
 
       {ideas.length === 0 ? (
         <div className="queue-empty">
-          <p>No ideas yet. Add one above!</p>
+          <div className="queue-empty-icon">~</div>
+          <p>No ideas yet. Add one in Quick Idea!</p>
         </div>
       ) : (
         <div className="queue-list">
@@ -108,7 +109,7 @@ function IdeaQueue() {
                     <button className="btn-small btn-primary" onClick={() => handlePostNow(idea.id)}>
                       Post Now
                     </button>
-                    <button className="btn-small btn-outline" onClick={() => handleDelete(idea.id)}>
+                    <button className="btn-small btn-danger" onClick={() => handleDelete(idea.id)}>
                       Remove
                     </button>
                   </>

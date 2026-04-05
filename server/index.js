@@ -8,6 +8,7 @@ import generateRoutes from './routes/generate.js';
 import authRoutes from './routes/auth.js';
 import instagramRoutes from './routes/instagram.js';
 import queueRoutes from './routes/queue.js';
+import referenceRoutes from './routes/reference.js';
 
 dotenv.config({ path: join(dirname(fileURLToPath(import.meta.url)), '../.env') });
 
@@ -30,6 +31,7 @@ app.use('/api/generate', generateRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/instagram', instagramRoutes);
 app.use('/api/queue', queueRoutes);
+app.use('/api/reference', referenceRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
