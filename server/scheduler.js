@@ -160,5 +160,91 @@ cron.schedule('0 3 * * 0', async () => {
   }
 });
 
+/**
+ * Process a specific idea by ID (for "Post Now")
+ */
+async function processIdeaById(id) {
+  const { getIdeaById } = await import('./db.js');
+  const idea = getIdeaById(id);
+
+  if (!idea) {
+    throw new Error('Idea not found');
+  }
+  if (idea.status !== 'pending') {
+    throw new Error(`Idea is not pending (current status: ${idea.status})`);
+  }
+
+  console.log(`[Scheduler] Post Now: Processing idea #${idea.id}: "${idea.prompt.substring(0, 50)}..."`);
+  updateIdeaStatus(idea.id, 'processing');
+
+  const token = getToken();
+  if (!token || !token.access_token) {
+    updateIdeaStatus(idea.id, 'failed', { error: 'No Instagram auth token found. Please log in first.' });
+    throw new Error('No Instagram auth token found');
+  }
+
+  if (token.expires_at && Date.now() > token.expires_at) {
+    updateIdeaStatus(idea.id, 'failed', { error: 'Instagram token expired. Please re-authenticate.' });
+    throw new Error('Instagram token expired');
+  }
+
+  let retries = 3;
+  let lastError;
+
+  while (retries > 0) {
+    try {
+      const accessToken = token.page_access_token || token.access_token;
+      const model = idea.model || 'grok';
+      let publicUrl, caption, content, result;
+
+      if (idea.media_type === 'image') {
+        content = await generateImageCaption(idea.prompt);
+        let image;
+        if (model === 'flux') {
+          image = await generateFluxImage(content.imagePrompt);
+        } else {
+          image = await generateImage(content.imagePrompt);
+        }
+        publicUrl = await uploadImage(image.imageUrl);
+        caption = `${content.caption}\n\n${content.hashtags.map(h => `#${h}`).join(' ')}`;
+        result = await postImage(accessToken, token.instagram_account_id, publicUrl, caption);
+      } else {
+        content = await generateReelContent(idea.prompt);
+        let video;
+        if (model === 'kling') {
+          video = await generateKlingVideo(content.videoPrompt, content.script, { duration: 10, aspectRatio: '9:16' });
+        } else {
+          video = await generateVideoWithAudio(content.videoPrompt, content.script, { duration: 10, aspectRatio: '9:16' });
+        }
+        publicUrl = await uploadVideo(video.videoUrl);
+        caption = `${content.caption}\n\n${content.hashtags.map(h => `#${h}`).join(' ')}`;
+        result = await postReel(accessToken, token.instagram_account_id, publicUrl, caption);
+      }
+
+      updateIdeaStatus(idea.id, 'completed', {
+        videoUrl: publicUrl,
+        caption,
+        script: JSON.stringify(content),
+        instagramMediaId: result.id
+      });
+
+      console.log(`[Scheduler] Post Now: Successfully posted idea #${idea.id} (media ID: ${result.id})`);
+      return;
+
+    } catch (error) {
+      lastError = error;
+      retries--;
+      console.error(`[Scheduler] Post Now error for #${idea.id} (${retries} retries left):`, error.message);
+      if (retries > 0) {
+        const delay = (3 - retries) * 30000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  updateIdeaStatus(idea.id, 'failed', { error: lastError?.message || 'Unknown error after 3 retries' });
+  throw new Error(`Failed after 3 attempts: ${lastError?.message}`);
+}
+
 // Export for manual triggering via API
-export { processNextIdea };
+export { processNextIdea, processIdeaById };

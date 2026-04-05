@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getIdeas, deleteIdea, retryIdea } from '../services/api';
+import { getIdeas, deleteIdea, retryIdea, postIdeaNow } from '../services/api';
 
 const STATUS_COLORS = {
   pending: '#f59e0b',
@@ -32,6 +32,15 @@ function IdeaQueue() {
     try {
       await deleteIdea(id);
       setIdeas(ideas.filter(i => i.id !== id));
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const handlePostNow = async (id) => {
+    try {
+      await postIdeaNow(id);
+      loadIdeas();
     } catch (err) {
       alert(err.message);
     }
@@ -95,9 +104,14 @@ function IdeaQueue() {
               </div>
               <div className="queue-item-actions">
                 {idea.status === 'pending' && (
-                  <button className="btn-small btn-outline" onClick={() => handleDelete(idea.id)}>
-                    Remove
-                  </button>
+                  <>
+                    <button className="btn-small btn-primary" onClick={() => handlePostNow(idea.id)}>
+                      Post Now
+                    </button>
+                    <button className="btn-small btn-outline" onClick={() => handleDelete(idea.id)}>
+                      Remove
+                    </button>
+                  </>
                 )}
                 {idea.status === 'failed' && (
                   <button className="btn-small btn-outline" onClick={() => handleRetry(idea.id)}>
