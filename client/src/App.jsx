@@ -5,6 +5,7 @@ import ReelPreview from './components/ReelPreview';
 import InstagramLogin from './components/InstagramLogin';
 import QuickIdea from './components/QuickIdea';
 import IdeaQueue from './components/IdeaQueue';
+import CharacterRef from './components/CharacterRef';
 import {
   generateScript,
   generateAudio,
@@ -152,8 +153,11 @@ function App() {
     <div className="app">
       <header className="header">
         <h1>Reel Engine</h1>
+        <p className="header-subtitle">AI-powered Instagram content</p>
         <InstagramLogin user={user} onLogout={handleLogout} />
       </header>
+
+      <CharacterRef />
 
       <nav className="tab-nav">
         <button
@@ -205,7 +209,7 @@ function App() {
       </main>
 
       <footer className="footer">
-        <p>Powered by OpenAI, Grok xAI, and Meta Graph API</p>
+        <p>Powered by OpenAI, Grok xAI, FLUX, and Meta Graph API</p>
       </footer>
     </div>
   );

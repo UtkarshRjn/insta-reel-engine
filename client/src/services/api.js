@@ -121,3 +121,30 @@ export async function retryIdea(id) {
   if (!response.ok) throw new Error(await response.text());
   return response.json();
 }
+
+// --- Reference Image API ---
+
+export async function getRefImage() {
+  const response = await fetch(`${API_URL}/reference`);
+  if (!response.ok) throw new Error(await response.text());
+  return response.json();
+}
+
+export async function uploadRefImage(file) {
+  const formData = new FormData();
+  formData.append('image', file);
+  const response = await fetch(`${API_URL}/reference`, {
+    method: 'POST',
+    body: formData
+  });
+  if (!response.ok) throw new Error(await response.text());
+  return response.json();
+}
+
+export async function removeRefImage() {
+  const response = await fetch(`${API_URL}/reference`, {
+    method: 'DELETE'
+  });
+  if (!response.ok) throw new Error(await response.text());
+  return response.json();
+}
