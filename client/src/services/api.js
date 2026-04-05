@@ -106,6 +106,14 @@ export async function deleteIdea(id) {
   return response.json();
 }
 
+export async function postIdeaNow(id) {
+  const response = await fetch(`${API_URL}/queue/ideas/${id}/post-now`, {
+    method: 'POST'
+  });
+  if (!response.ok) throw new Error(await response.text());
+  return response.json();
+}
+
 export async function retryIdea(id) {
   const response = await fetch(`${API_URL}/queue/ideas/${id}/retry`, {
     method: 'POST'

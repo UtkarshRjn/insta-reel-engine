@@ -145,6 +145,10 @@ export function retryIdea(id) {
   return result.changes > 0;
 }
 
+export function getIdeaById(id) {
+  return stmtGetIdeaById.get(id) || null;
+}
+
 // --- Auth Tokens ---
 
 const stmtSaveToken = db.prepare(`

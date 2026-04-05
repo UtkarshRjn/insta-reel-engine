@@ -73,6 +73,20 @@ router.get('/next', (req, res) => {
   }
 });
 
+// Post a specific idea now (skip schedule)
+router.post('/ideas/:id/post-now', async (req, res) => {
+  try {
+    const { processIdeaById } = await import('../scheduler.js');
+    const id = Number(req.params.id);
+    // Run async, respond immediately
+    processIdeaById(id).catch(err => console.error(`[Post Now] Error for #${id}:`, err.message));
+    res.json({ message: `Processing idea #${id}. Check server logs for progress.` });
+  } catch (error) {
+    console.error('Post now error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Manual trigger (for testing)
 router.post('/trigger', async (req, res) => {
   try {
