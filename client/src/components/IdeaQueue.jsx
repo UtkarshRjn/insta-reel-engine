@@ -90,6 +90,7 @@ function IdeaQueue() {
                   {idea.status}
                 </span>
                 <span className="queue-date">{idea.scheduled_date}</span>
+                <span className="queue-model">{idea.media_type === 'image' ? 'IMG' : 'VID'} · {idea.model || 'grok'}</span>
                 <p className="queue-prompt">{idea.prompt}</p>
               </div>
               <div className="queue-item-actions">

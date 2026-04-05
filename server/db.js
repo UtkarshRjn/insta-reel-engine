@@ -23,6 +23,7 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     prompt TEXT NOT NULL,
     media_type TEXT DEFAULT 'video' CHECK(media_type IN ('video', 'image')),
+    model TEXT DEFAULT 'grok' CHECK(model IN ('grok', 'flux', 'kling')),
     status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'completed', 'failed')),
     scheduled_date DATE,
     video_url TEXT,
@@ -47,7 +48,7 @@ db.exec(`
 // --- Ideas Queue ---
 
 const stmtInsertIdea = db.prepare(`
-  INSERT INTO ideas_queue (prompt, media_type, scheduled_date) VALUES (?, ?, ?)
+  INSERT INTO ideas_queue (prompt, media_type, model, scheduled_date) VALUES (?, ?, ?, ?)
 `);
 
 const stmtGetNextPending = db.prepare(`
@@ -88,7 +89,12 @@ const stmtGetIdeaById = db.prepare(`
   SELECT * FROM ideas_queue WHERE id = ?
 `);
 
-export function addIdea(prompt, scheduledDate = null, mediaType = 'video') {
+export function addIdea(prompt, scheduledDate = null, mediaType = 'video', model = null) {
+  // Auto-assign model based on media type if not specified
+  if (!model) {
+    model = mediaType === 'image' ? 'grok' : 'grok';
+  }
+
   if (!scheduledDate) {
     const row = stmtGetNextDate.get();
     if (row && row.last_date) {
@@ -102,7 +108,7 @@ export function addIdea(prompt, scheduledDate = null, mediaType = 'video') {
     }
   }
 
-  const result = stmtInsertIdea.run(prompt, mediaType, scheduledDate);
+  const result = stmtInsertIdea.run(prompt, mediaType, model, scheduledDate);
   return stmtGetIdeaById.get(result.lastInsertRowid);
 }
 

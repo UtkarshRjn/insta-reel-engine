@@ -1,12 +1,30 @@
 import { useState } from 'react';
 import { addIdea } from '../services/api';
 
+const MODEL_OPTIONS = {
+  video: [
+    { value: 'grok', label: 'Grok xAI' },
+    { value: 'kling', label: 'Kling 3.0 (fal.ai)' }
+  ],
+  image: [
+    { value: 'grok', label: 'Grok Imagine' },
+    { value: 'flux', label: 'FLUX Kontext (fal.ai)' }
+  ]
+};
+
 function QuickIdea() {
   const [prompt, setPrompt] = useState('');
   const [mediaType, setMediaType] = useState('video');
+  const [model, setModel] = useState('grok');
   const [scheduledDate, setScheduledDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState(null);
+
+  const handleMediaTypeChange = (type) => {
+    setMediaType(type);
+    // Reset model to first option for this type
+    setModel(MODEL_OPTIONS[type][0].value);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -14,8 +32,8 @@ function QuickIdea() {
 
     setSubmitting(true);
     try {
-      const idea = await addIdea(prompt.trim(), scheduledDate || undefined, mediaType);
-      setToast({ type: 'success', message: `Queued for ${idea.scheduled_date}` });
+      const idea = await addIdea(prompt.trim(), scheduledDate || undefined, mediaType, model);
+      setToast({ type: 'success', message: `Queued for ${idea.scheduled_date} (${model})` });
       setPrompt('');
       setScheduledDate('');
       setTimeout(() => setToast(null), 3000);
@@ -29,7 +47,7 @@ function QuickIdea() {
 
   return (
     <div className="quick-idea">
-      <h2>What's your reel idea?</h2>
+      <h2>What's your idea?</h2>
       <form onSubmit={handleSubmit}>
         <div className="form-group">
           <textarea
@@ -46,14 +64,26 @@ function QuickIdea() {
             <button
               type="button"
               className={`toggle-btn ${mediaType === 'video' ? 'active' : ''}`}
-              onClick={() => setMediaType('video')}
+              onClick={() => handleMediaTypeChange('video')}
             >Video (Reel)</button>
             <button
               type="button"
               className={`toggle-btn ${mediaType === 'image' ? 'active' : ''}`}
-              onClick={() => setMediaType('image')}
+              onClick={() => handleMediaTypeChange('image')}
             >Image (Post)</button>
           </div>
+        </div>
+        <div className="form-group">
+          <label>Model</label>
+          <select
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            disabled={submitting}
+          >
+            {MODEL_OPTIONS[mediaType].map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
         </div>
         <div className="form-group">
           <label>Schedule for (optional)</label>

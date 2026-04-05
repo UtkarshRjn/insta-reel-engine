@@ -5,6 +5,7 @@ import { dirname, join } from 'path';
 import { getNextPendingIdea, updateIdeaStatus, getToken } from './db.js';
 import { generateReelContent, generateImageCaption } from './services/openai.js';
 import { generateVideoWithAudio, generateImage } from './services/grok.js';
+import { generateFluxImage, generateKlingVideo } from './services/fal.js';
 import { uploadVideo, uploadImage } from './services/storage.js';
 import { postReel, postImage, refreshLongLivedToken } from './services/instagram.js';
 
@@ -44,15 +45,22 @@ async function processNextIdea() {
   while (retries > 0) {
     try {
       const accessToken = token.page_access_token || token.access_token;
+      const model = idea.model || 'grok';
       let publicUrl, caption, content, result;
 
       if (idea.media_type === 'image') {
-        // Image pipeline
-        console.log('[Scheduler] Step 1: Generating image caption...');
+        // --- IMAGE PIPELINE ---
+        console.log(`[Scheduler] Step 1: Generating image caption...`);
         content = await generateImageCaption(idea.prompt);
 
-        console.log('[Scheduler] Step 2: Generating image with Grok Imagine...');
-        const image = await generateImage(content.imagePrompt);
+        console.log(`[Scheduler] Step 2: Generating image with ${model}...`);
+        let image;
+        if (model === 'flux') {
+          image = await generateFluxImage(content.imagePrompt);
+        } else {
+          // grok (default for images)
+          image = await generateImage(content.imagePrompt);
+        }
 
         console.log('[Scheduler] Step 3: Uploading image to R2...');
         publicUrl = await uploadImage(image.imageUrl);
@@ -62,15 +70,24 @@ async function processNextIdea() {
         console.log('[Scheduler] Step 4: Posting image to Instagram...');
         result = await postImage(accessToken, token.instagram_account_id, publicUrl, caption);
       } else {
-        // Video pipeline (default)
+        // --- VIDEO PIPELINE ---
         console.log('[Scheduler] Step 1: Generating script...');
         content = await generateReelContent(idea.prompt);
 
-        console.log('[Scheduler] Step 2: Generating video with Grok...');
-        const video = await generateVideoWithAudio(content.videoPrompt, content.script, {
-          duration: 10,
-          aspectRatio: '9:16'
-        });
+        console.log(`[Scheduler] Step 2: Generating video with ${model}...`);
+        let video;
+        if (model === 'kling') {
+          video = await generateKlingVideo(content.videoPrompt, content.script, {
+            duration: 10,
+            aspectRatio: '9:16'
+          });
+        } else {
+          // grok (default for video)
+          video = await generateVideoWithAudio(content.videoPrompt, content.script, {
+            duration: 10,
+            aspectRatio: '9:16'
+          });
+        }
 
         console.log('[Scheduler] Step 3: Uploading video to R2...');
         publicUrl = await uploadVideo(video.videoUrl);

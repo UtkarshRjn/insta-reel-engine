@@ -6,14 +6,15 @@ const router = Router();
 // Add a new idea to the queue
 router.post('/ideas', (req, res) => {
   try {
-    const { prompt, scheduledDate, mediaType } = req.body;
+    const { prompt, scheduledDate, mediaType, model } = req.body;
 
     if (!prompt || !prompt.trim()) {
       return res.status(400).json({ error: 'Prompt is required' });
     }
 
     const validType = mediaType === 'image' ? 'image' : 'video';
-    const idea = addIdea(prompt.trim(), scheduledDate || null, validType);
+    const validModel = ['grok', 'flux', 'kling'].includes(model) ? model : 'grok';
+    const idea = addIdea(prompt.trim(), scheduledDate || null, validType, validModel);
     res.status(201).json(idea);
   } catch (error) {
     console.error('Add idea error:', error);

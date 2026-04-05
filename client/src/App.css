@@ -628,6 +628,15 @@ button:disabled {
   color: rgba(255, 255, 255, 0.5);
 }
 
+.queue-model {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.1rem 0.4rem;
+  border-radius: 6px;
+  text-transform: uppercase;
+}
+
 .queue-prompt {
   width: 100%;
   margin-top: 0.25rem;
