@@ -22,6 +22,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS ideas_queue (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     prompt TEXT NOT NULL,
+    media_type TEXT DEFAULT 'video' CHECK(media_type IN ('video', 'image')),
     status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'completed', 'failed')),
     scheduled_date DATE,
     video_url TEXT,
@@ -46,7 +47,7 @@ db.exec(`
 // --- Ideas Queue ---
 
 const stmtInsertIdea = db.prepare(`
-  INSERT INTO ideas_queue (prompt, scheduled_date) VALUES (?, ?)
+  INSERT INTO ideas_queue (prompt, media_type, scheduled_date) VALUES (?, ?, ?)
 `);
 
 const stmtGetNextPending = db.prepare(`
@@ -87,23 +88,21 @@ const stmtGetIdeaById = db.prepare(`
   SELECT * FROM ideas_queue WHERE id = ?
 `);
 
-export function addIdea(prompt, scheduledDate = null) {
+export function addIdea(prompt, scheduledDate = null, mediaType = 'video') {
   if (!scheduledDate) {
     const row = stmtGetNextDate.get();
     if (row && row.last_date) {
-      // Next day after the latest scheduled pending idea
       const lastDate = new Date(row.last_date);
       lastDate.setDate(lastDate.getDate() + 1);
       scheduledDate = lastDate.toISOString().split('T')[0];
     } else {
-      // Tomorrow
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       scheduledDate = tomorrow.toISOString().split('T')[0];
     }
   }
 
-  const result = stmtInsertIdea.run(prompt, scheduledDate);
+  const result = stmtInsertIdea.run(prompt, mediaType, scheduledDate);
   return stmtGetIdeaById.get(result.lastInsertRowid);
 }
 

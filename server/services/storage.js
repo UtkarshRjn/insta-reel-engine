@@ -42,3 +42,27 @@ export async function uploadVideo(videoUrl) {
   console.log(`Uploaded to R2: ${publicUrl}`);
   return publicUrl;
 }
+
+/**
+ * Download image from a URL and upload it to Cloudflare R2
+ */
+export async function uploadImage(imageUrl) {
+  console.log('Downloading image from Grok...');
+  const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+  const imageBuffer = Buffer.from(response.data);
+
+  const filename = `images/${randomUUID()}.png`;
+
+  console.log(`Uploading to R2: ${filename}`);
+  const client = getS3Client();
+  await client.send(new PutObjectCommand({
+    Bucket: process.env.R2_BUCKET_NAME,
+    Key: filename,
+    Body: imageBuffer,
+    ContentType: 'image/png'
+  }));
+
+  const publicUrl = `${process.env.R2_PUBLIC_URL}/${filename}`;
+  console.log(`Uploaded to R2: ${publicUrl}`);
+  return publicUrl;
+}

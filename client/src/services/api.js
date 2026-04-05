@@ -76,8 +76,8 @@ export function getInstagramLoginUrl() {
 
 // --- Queue API ---
 
-export async function addIdea(prompt, scheduledDate) {
-  const body = { prompt };
+export async function addIdea(prompt, scheduledDate, mediaType = 'video') {
+  const body = { prompt, mediaType };
   if (scheduledDate) body.scheduledDate = scheduledDate;
 
   const response = await fetch(`${API_URL}/queue/ideas`, {

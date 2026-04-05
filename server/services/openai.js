@@ -42,3 +42,36 @@ Respond in JSON format:
   const content = JSON.parse(response.choices[0].message.content);
   return content;
 }
+
+export async function generateImageCaption(humanContext) {
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [
+      {
+        role: 'system',
+        content: `You are an expert social media content creator specializing in Instagram image posts.
+Your job is to take a human's rough idea/context and transform it into:
+1. A detailed image prompt for AI image generation
+2. An engaging Instagram caption
+3. Relevant hashtags
+
+The image prompt should be highly detailed and visual. The caption should be engaging and authentic.`
+      },
+      {
+        role: 'user',
+        content: `Create Instagram image post content from this context: "${humanContext}"
+
+Respond in JSON format:
+{
+  "imagePrompt": "Detailed prompt for AI image generation",
+  "hashtags": ["relevant", "hashtags"],
+  "caption": "Instagram caption for the post"
+}`
+      }
+    ],
+    response_format: { type: 'json_object' }
+  });
+
+  const content = JSON.parse(response.choices[0].message.content);
+  return content;
+}

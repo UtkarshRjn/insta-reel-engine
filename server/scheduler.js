@@ -3,10 +3,10 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { getNextPendingIdea, updateIdeaStatus, getToken } from './db.js';
-import { generateReelContent } from './services/openai.js';
-import { generateVideoWithAudio } from './services/grok.js';
-import { uploadVideo } from './services/storage.js';
-import { postReel, refreshLongLivedToken } from './services/instagram.js';
+import { generateReelContent, generateImageCaption } from './services/openai.js';
+import { generateVideoWithAudio, generateImage } from './services/grok.js';
+import { uploadVideo, uploadImage } from './services/storage.js';
+import { postReel, postImage, refreshLongLivedToken } from './services/instagram.js';
 
 dotenv.config({ path: join(dirname(fileURLToPath(import.meta.url)), '../.env') });
 
@@ -43,28 +43,43 @@ async function processNextIdea() {
 
   while (retries > 0) {
     try {
-      // Step 1: Generate script and content
-      console.log('[Scheduler] Step 1: Generating script...');
-      const content = await generateReelContent(idea.prompt);
-
-      // Step 2: Generate video with Grok
-      console.log('[Scheduler] Step 2: Generating video with Grok...');
-      const video = await generateVideoWithAudio(content.videoPrompt, content.script, {
-        duration: 10,
-        aspectRatio: '9:16'
-      });
-
-      // Step 3: Upload to R2 for public access
-      console.log('[Scheduler] Step 3: Uploading video to R2...');
-      const publicUrl = await uploadVideo(video.videoUrl);
-
-      // Step 4: Build caption
-      const caption = `${content.caption}\n\n${content.hashtags.map(h => `#${h}`).join(' ')}`;
-
-      // Step 5: Post to Instagram
-      console.log('[Scheduler] Step 4: Posting to Instagram...');
       const accessToken = token.page_access_token || token.access_token;
-      const result = await postReel(accessToken, token.instagram_account_id, publicUrl, caption);
+      let publicUrl, caption, content, result;
+
+      if (idea.media_type === 'image') {
+        // Image pipeline
+        console.log('[Scheduler] Step 1: Generating image caption...');
+        content = await generateImageCaption(idea.prompt);
+
+        console.log('[Scheduler] Step 2: Generating image with Grok Imagine...');
+        const image = await generateImage(content.imagePrompt);
+
+        console.log('[Scheduler] Step 3: Uploading image to R2...');
+        publicUrl = await uploadImage(image.imageUrl);
+
+        caption = `${content.caption}\n\n${content.hashtags.map(h => `#${h}`).join(' ')}`;
+
+        console.log('[Scheduler] Step 4: Posting image to Instagram...');
+        result = await postImage(accessToken, token.instagram_account_id, publicUrl, caption);
+      } else {
+        // Video pipeline (default)
+        console.log('[Scheduler] Step 1: Generating script...');
+        content = await generateReelContent(idea.prompt);
+
+        console.log('[Scheduler] Step 2: Generating video with Grok...');
+        const video = await generateVideoWithAudio(content.videoPrompt, content.script, {
+          duration: 10,
+          aspectRatio: '9:16'
+        });
+
+        console.log('[Scheduler] Step 3: Uploading video to R2...');
+        publicUrl = await uploadVideo(video.videoUrl);
+
+        caption = `${content.caption}\n\n${content.hashtags.map(h => `#${h}`).join(' ')}`;
+
+        console.log('[Scheduler] Step 4: Posting reel to Instagram...');
+        result = await postReel(accessToken, token.instagram_account_id, publicUrl, caption);
+      }
 
       // Mark completed
       updateIdeaStatus(idea.id, 'completed', {

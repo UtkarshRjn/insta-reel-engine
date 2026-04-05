@@ -131,6 +131,40 @@ async function waitForContainerReady(containerId, accessToken, maxAttempts = 30)
   throw new Error('Timeout waiting for media container to be ready');
 }
 
+export async function postImage(accessToken, instagramAccountId, imageUrl, caption) {
+  // Step 1: Create a media container for image
+  const containerResponse = await axios.post(
+    `${GRAPH_API_URL}/${instagramAccountId}/media`,
+    null,
+    {
+      params: {
+        image_url: imageUrl,
+        caption,
+        access_token: accessToken
+      }
+    }
+  );
+
+  const containerId = containerResponse.data.id;
+
+  // Step 2: Wait for the container to be ready
+  await waitForContainerReady(containerId, accessToken);
+
+  // Step 3: Publish the image post
+  const publishResponse = await axios.post(
+    `${GRAPH_API_URL}/${instagramAccountId}/media_publish`,
+    null,
+    {
+      params: {
+        creation_id: containerId,
+        access_token: accessToken
+      }
+    }
+  );
+
+  return publishResponse.data;
+}
+
 export async function refreshLongLivedToken(currentToken) {
   const { saveToken, getToken } = await import('../db.js');
 

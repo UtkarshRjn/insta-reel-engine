@@ -3,6 +3,7 @@ import { addIdea } from '../services/api';
 
 function QuickIdea() {
   const [prompt, setPrompt] = useState('');
+  const [mediaType, setMediaType] = useState('video');
   const [scheduledDate, setScheduledDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState(null);
@@ -13,7 +14,7 @@ function QuickIdea() {
 
     setSubmitting(true);
     try {
-      const idea = await addIdea(prompt.trim(), scheduledDate || undefined);
+      const idea = await addIdea(prompt.trim(), scheduledDate || undefined, mediaType);
       setToast({ type: 'success', message: `Queued for ${idea.scheduled_date}` });
       setPrompt('');
       setScheduledDate('');
@@ -38,6 +39,21 @@ function QuickIdea() {
             rows={4}
             disabled={submitting}
           />
+        </div>
+        <div className="form-group">
+          <label>Type</label>
+          <div className="media-toggle">
+            <button
+              type="button"
+              className={`toggle-btn ${mediaType === 'video' ? 'active' : ''}`}
+              onClick={() => setMediaType('video')}
+            >Video (Reel)</button>
+            <button
+              type="button"
+              className={`toggle-btn ${mediaType === 'image' ? 'active' : ''}`}
+              onClick={() => setMediaType('image')}
+            >Image (Post)</button>
+          </div>
         </div>
         <div className="form-group">
           <label>Schedule for (optional)</label>

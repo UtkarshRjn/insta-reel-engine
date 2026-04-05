@@ -6,7 +6,8 @@ import axios from 'axios';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: join(__dirname, '../../.env') });
 
-const XAI_API_URL = 'https://api.x.ai/v1/videos/generations';
+const XAI_VIDEO_URL = 'https://api.x.ai/v1/videos/generations';
+const XAI_IMAGE_URL = 'https://api.x.ai/v1/images/generations';
 
 /**
  * Generate video using Grok (xAI Aurora)
@@ -25,7 +26,7 @@ export async function generateVideo(prompt, options = {}) {
   console.log(`Generating ${validDuration}s video with Grok (xAI Aurora)...`);
 
   const response = await axios.post(
-    XAI_API_URL,
+    XAI_VIDEO_URL,
     {
       model: 'grok-imagine-video',
       prompt,
@@ -102,10 +103,47 @@ async function pollForCompletion(requestId, maxAttempts = 180) {
 }
 
 /**
+ * Generate image using Grok Imagine
+ * @param {string} prompt - Image prompt
+ * @param {object} options - Generation options
+ */
+export async function generateImage(prompt, options = {}) {
+  const {
+    n = 1,
+    aspectRatio = '9:16' // vertical for Instagram posts
+  } = options;
+
+  console.log('Generating image with Grok Imagine...');
+
+  const response = await axios.post(
+    XAI_IMAGE_URL,
+    {
+      model: 'grok-2-image',
+      prompt,
+      n,
+      response_format: 'url'
+    },
+    {
+      headers: {
+        'Authorization': `Bearer ${process.env.XAI_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    }
+  );
+
+  const imageUrl = response.data.data?.[0]?.url;
+  if (!imageUrl) {
+    throw new Error('Image generation completed but no URL found in response');
+  }
+
+  console.log('Image generated successfully.');
+  return { imageUrl };
+}
+
+/**
  * Cost estimation placeholder for Grok video generation
  */
 export function estimateCost(durationSeconds) {
-  // xAI pricing may vary — update when pricing is confirmed
   const perSecond = 0.10;
   const total = durationSeconds * perSecond;
   return {
