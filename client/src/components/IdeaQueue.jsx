@@ -32,16 +32,23 @@ function IdeaQueue() {
   // Poll when any idea is generating
   useEffect(() => {
     const hasGenerating = ideas.some(i => i.preview_status === 'generating' || i.status === 'processing');
-    if (hasGenerating && !pollRef.current) {
-      pollRef.current = setInterval(loadIdeas, 5000);
-    } else if (!hasGenerating && pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
+    if (hasGenerating) {
+      pollRef.current = setInterval(async () => {
+        try {
+          const data = await getIdeas(filter);
+          setIdeas(data);
+        } catch (err) {
+          console.error('Poll failed:', err);
+        }
+      }, 5000);
     }
     return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
     };
-  }, [ideas]);
+  }, [ideas.some(i => i.preview_status === 'generating' || i.status === 'processing'), filter]);
 
   const handleDelete = async (id) => {
     try {
