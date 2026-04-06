@@ -46,12 +46,11 @@ export async function generateFluxImage(prompt, options = {}) {
   });
 
   const requestId = submitResponse.data.request_id;
+  const statusUrl = submitResponse.data.status_url;
+  const responseUrl = submitResponse.data.response_url;
   console.log(`FLUX request submitted: ${requestId}`);
 
-  const result = await pollFalCompletion(
-    `${FLUX_API_URL}/requests/${requestId}/status`,
-    `${FLUX_API_URL}/requests/${requestId}`
-  );
+  const result = await pollFalCompletion(statusUrl, responseUrl);
 
   const imageUrl = result.images?.[0]?.url;
   if (!imageUrl) {
@@ -104,12 +103,11 @@ export async function generateKlingVideo(prompt, audioPrompt, options = {}) {
   });
 
   const requestId = submitResponse.data.request_id;
+  const statusUrl = submitResponse.data.status_url;
+  const responseUrl = submitResponse.data.response_url;
   console.log(`Kling request submitted: ${requestId}`);
 
-  const result = await pollFalCompletion(
-    `${KLING_API_URL}/requests/${requestId}/status`,
-    `${KLING_API_URL}/requests/${requestId}`
-  );
+  const result = await pollFalCompletion(statusUrl, responseUrl);
 
   const videoUrl = result.video?.url;
   if (!videoUrl) {

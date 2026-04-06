@@ -16,14 +16,15 @@ function QuickIdea() {
   const [prompt, setPrompt] = useState('');
   const [mediaType, setMediaType] = useState('video');
   const [model, setModel] = useState('grok');
+  const [imageCount, setImageCount] = useState(1);
   const [scheduledDate, setScheduledDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState(null);
 
   const handleMediaTypeChange = (type) => {
     setMediaType(type);
-    // Reset model to first option for this type
     setModel(MODEL_OPTIONS[type][0].value);
+    if (type === 'video') setImageCount(1);
   };
 
   const handleSubmit = async (e) => {
@@ -32,7 +33,7 @@ function QuickIdea() {
 
     setSubmitting(true);
     try {
-      const idea = await addIdea(prompt.trim(), scheduledDate || undefined, mediaType, model);
+      const idea = await addIdea(prompt.trim(), scheduledDate || undefined, mediaType, model, imageCount);
       setToast({ type: 'success', message: `Queued for ${idea.scheduled_date} (${model})` });
       setPrompt('');
       setScheduledDate('');
@@ -85,6 +86,22 @@ function QuickIdea() {
             ))}
           </select>
         </div>
+        {mediaType === 'image' && (
+          <div className="form-group">
+            <label>Number of Images</label>
+            <div className="image-count-selector">
+              {[1, 2, 3, 4, 5].map(n => (
+                <button
+                  key={n}
+                  type="button"
+                  className={`count-btn ${imageCount === n ? 'active' : ''}`}
+                  onClick={() => setImageCount(n)}
+                  disabled={submitting}
+                >{n}</button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="form-group">
           <label>Schedule for (optional)</label>
           <input

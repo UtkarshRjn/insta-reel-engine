@@ -131,6 +131,63 @@ async function waitForContainerReady(containerId, accessToken, maxAttempts = 30)
   throw new Error('Timeout waiting for media container to be ready');
 }
 
+export async function postCarousel(accessToken, instagramAccountId, imageUrls, caption) {
+  // Step 1: Create child containers for each image
+  const childIds = [];
+  for (const imageUrl of imageUrls) {
+    const childResponse = await axios.post(
+      `${GRAPH_API_URL}/${instagramAccountId}/media`,
+      null,
+      {
+        params: {
+          image_url: imageUrl,
+          is_carousel_item: true,
+          access_token: accessToken
+        }
+      }
+    );
+    childIds.push(childResponse.data.id);
+  }
+
+  // Step 2: Wait for all children to be ready
+  for (const childId of childIds) {
+    await waitForContainerReady(childId, accessToken);
+  }
+
+  // Step 3: Create carousel container
+  const carouselResponse = await axios.post(
+    `${GRAPH_API_URL}/${instagramAccountId}/media`,
+    null,
+    {
+      params: {
+        media_type: 'CAROUSEL',
+        children: childIds.join(','),
+        caption,
+        access_token: accessToken
+      }
+    }
+  );
+
+  const carouselId = carouselResponse.data.id;
+
+  // Step 4: Wait for carousel to be ready
+  await waitForContainerReady(carouselId, accessToken);
+
+  // Step 5: Publish
+  const publishResponse = await axios.post(
+    `${GRAPH_API_URL}/${instagramAccountId}/media_publish`,
+    null,
+    {
+      params: {
+        creation_id: carouselId,
+        access_token: accessToken
+      }
+    }
+  );
+
+  return publishResponse.data;
+}
+
 export async function postImage(accessToken, instagramAccountId, imageUrl, caption) {
   // Step 1: Create a media container for image
   const containerResponse = await axios.post(

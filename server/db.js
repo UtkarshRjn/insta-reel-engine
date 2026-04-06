@@ -51,10 +51,15 @@ db.exec(`
   );
 `);
 
+// --- Schema migrations (idempotent) ---
+try { db.exec('ALTER TABLE ideas_queue ADD COLUMN image_count INTEGER DEFAULT 1'); } catch(e) {}
+try { db.exec('ALTER TABLE ideas_queue ADD COLUMN preview_urls TEXT'); } catch(e) {}
+try { db.exec('ALTER TABLE ideas_queue ADD COLUMN preview_status TEXT'); } catch(e) {}
+
 // --- Ideas Queue ---
 
 const stmtInsertIdea = db.prepare(`
-  INSERT INTO ideas_queue (prompt, media_type, model, scheduled_date) VALUES (?, ?, ?, ?)
+  INSERT INTO ideas_queue (prompt, media_type, model, scheduled_date, image_count) VALUES (?, ?, ?, ?, ?)
 `);
 
 const stmtGetNextPending = db.prepare(`
@@ -95,7 +100,7 @@ const stmtGetIdeaById = db.prepare(`
   SELECT * FROM ideas_queue WHERE id = ?
 `);
 
-export function addIdea(prompt, scheduledDate = null, mediaType = 'video', model = null) {
+export function addIdea(prompt, scheduledDate = null, mediaType = 'video', model = null, imageCount = 1) {
   // Auto-assign model based on media type if not specified
   if (!model) {
     model = mediaType === 'image' ? 'grok' : 'grok';
@@ -114,7 +119,8 @@ export function addIdea(prompt, scheduledDate = null, mediaType = 'video', model
     }
   }
 
-  const result = stmtInsertIdea.run(prompt, mediaType, model, scheduledDate);
+  const count = mediaType === 'image' ? Math.min(Math.max(Number(imageCount) || 1, 1), 5) : 1;
+  const result = stmtInsertIdea.run(prompt, mediaType, model, scheduledDate, count);
   return stmtGetIdeaById.get(result.lastInsertRowid);
 }
 
@@ -153,6 +159,21 @@ export function retryIdea(id) {
 
 export function getIdeaById(id) {
   return stmtGetIdeaById.get(id) || null;
+}
+
+const stmtUpdatePreview = db.prepare(`
+  UPDATE ideas_queue SET preview_status = ?, preview_urls = ?, caption = ?, script = ?, error = ? WHERE id = ?
+`);
+
+export function updatePreviewStatus(id, previewStatus, data = {}) {
+  stmtUpdatePreview.run(
+    previewStatus,
+    data.previewUrls ? JSON.stringify(data.previewUrls) : null,
+    data.caption || null,
+    data.script || null,
+    data.error || null,
+    id
+  );
 }
 
 // --- Auth Tokens ---
