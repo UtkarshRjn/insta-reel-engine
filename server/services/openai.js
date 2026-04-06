@@ -43,6 +43,39 @@ Respond in JSON format:
   return content;
 }
 
+export async function generateMultiImageCaptions(humanContext, imageCount) {
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [
+      {
+        role: 'system',
+        content: `You are an expert social media content creator specializing in Instagram carousel posts.
+Your job is to take a human's rough idea/context and transform it into:
+1. Exactly ${imageCount} distinct but thematically cohesive image prompts for AI image generation
+2. An engaging Instagram caption for the carousel post
+3. Relevant hashtags
+
+The image prompts should tell a visual story or show variations on a theme. Each prompt must be self-contained and highly detailed, but they should feel like they belong together as a carousel. Think of it as different "slides" of the same story.`
+      },
+      {
+        role: 'user',
+        content: `Create an Instagram carousel post with ${imageCount} images from this context: "${humanContext}"
+
+Respond in JSON format:
+{
+  "imagePrompts": ["detailed prompt 1", "detailed prompt 2", ...],
+  "hashtags": ["relevant", "hashtags"],
+  "caption": "Instagram caption for the carousel post"
+}`
+      }
+    ],
+    response_format: { type: 'json_object' }
+  });
+
+  const content = JSON.parse(response.choices[0].message.content);
+  return content;
+}
+
 export async function generateImageCaption(humanContext) {
   const response = await openai.chat.completions.create({
     model: 'gpt-4o',
