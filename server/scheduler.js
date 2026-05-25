@@ -56,7 +56,8 @@ async function processNextIdea() {
         console.log(`[Scheduler] Step 2: Generating image with ${model}...`);
         let image;
         if (model === 'flux') {
-          image = await generateFluxImage(content.imagePrompt);
+          const fluxOpts = idea.aspect_ratio ? { aspectRatio: idea.aspect_ratio } : {};
+          image = await generateFluxImage(content.imagePrompt, fluxOpts);
         } else {
           // grok (default for images)
           image = await generateImage(content.imagePrompt);
@@ -201,7 +202,8 @@ async function processIdeaById(id) {
         content = await generateImageCaption(idea.prompt);
         let image;
         if (model === 'flux') {
-          image = await generateFluxImage(content.imagePrompt);
+          const fluxOpts = idea.aspect_ratio ? { aspectRatio: idea.aspect_ratio } : {};
+          image = await generateFluxImage(content.imagePrompt, fluxOpts);
         } else {
           image = await generateImage(content.imagePrompt);
         }

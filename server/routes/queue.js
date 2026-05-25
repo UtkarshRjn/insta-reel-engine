@@ -6,7 +6,7 @@ const router = Router();
 // Add a new idea to the queue
 router.post('/ideas', (req, res) => {
   try {
-    const { prompt, scheduledDate, mediaType, model, imageCount } = req.body;
+    const { prompt, scheduledDate, mediaType, model, imageCount, aspectRatio } = req.body;
 
     if (!prompt || !prompt.trim()) {
       return res.status(400).json({ error: 'Prompt is required' });
@@ -14,7 +14,12 @@ router.post('/ideas', (req, res) => {
 
     const validType = mediaType === 'image' ? 'image' : 'video';
     const validModel = ['grok', 'flux', 'kling'].includes(model) ? model : 'grok';
-    const idea = addIdea(prompt.trim(), scheduledDate || null, validType, validModel, imageCount);
+    // FLUX-supported ratios that also satisfy Instagram's 0.8–1.91 feed constraint
+    const validFluxRatios = ['1:1', '4:3', '3:2', '16:9'];
+    const validAspectRatio = (validType === 'image' && validModel === 'flux' && validFluxRatios.includes(aspectRatio))
+      ? aspectRatio
+      : null;
+    const idea = addIdea(prompt.trim(), scheduledDate || null, validType, validModel, imageCount, validAspectRatio);
     res.status(201).json(idea);
   } catch (error) {
     console.error('Add idea error:', error);
@@ -91,6 +96,51 @@ router.post('/ideas/:id/generate-preview', async (req, res) => {
   }
 });
 
+// Regenerate a single image in the preview with a custom prompt
+router.post('/ideas/:id/regenerate-image', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { index, prompt: customPrompt } = req.body;
+    const idea = getIdeaById(id);
+
+    if (!idea) return res.status(404).json({ error: 'Idea not found' });
+    if (idea.preview_status !== 'ready') {
+      return res.status(400).json({ error: 'Preview must be ready first' });
+    }
+
+    const previewUrls = JSON.parse(idea.preview_urls || '[]');
+    if (!Number.isInteger(index) || index < 0 || index >= previewUrls.length) {
+      return res.status(400).json({ error: 'Invalid image index' });
+    }
+    if (!customPrompt || !customPrompt.trim()) {
+      return res.status(400).json({ error: 'Custom prompt is required' });
+    }
+
+    // Mark as regenerating so the UI can poll/spinner
+    updatePreviewStatus(id, 'generating', {
+      previewUrls,
+      caption: idea.caption,
+      script: idea.script
+    });
+
+    regenerateSingleImage(idea, index, customPrompt.trim()).catch(err => {
+      console.error(`[Regen] Error for #${id} img ${index}:`, err.message);
+      // Restore ready state with the old URLs on failure
+      updatePreviewStatus(id, 'ready', {
+        previewUrls,
+        caption: idea.caption,
+        script: idea.script,
+        error: err.message
+      });
+    });
+
+    res.json({ message: `Regenerating image #${index} for idea ${id}` });
+  } catch (error) {
+    console.error('Regenerate image error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Post to Instagram (after preview is ready)
 router.post('/ideas/:id/post-to-instagram', async (req, res) => {
   try {
@@ -108,8 +158,11 @@ router.post('/ideas/:id/post-to-instagram', async (req, res) => {
 
     // Run async
     postIdeaToInstagram(idea).catch(err => {
-      console.error(`[Post] Error for #${id}:`, err.message);
-      updateIdeaStatus(id, 'failed', { error: err.message });
+      const igError = err.response?.data?.error;
+      const detail = igError ? `${igError.message} (code ${igError.code}, type ${igError.type})` : err.message;
+      console.error(`[Post] Error for #${id}:`, detail);
+      if (err.response?.data) console.error('[Post] Full response:', JSON.stringify(err.response.data));
+      updateIdeaStatus(id, 'failed', { error: detail });
     });
 
     res.json({ message: `Posting idea #${id} to Instagram` });
@@ -171,10 +224,11 @@ async function generatePreviewImages(idea) {
   console.log(`[Preview] Got ${content.imagePrompts.length} prompts. Generating images with ${model}...`);
 
   // Step 2: Generate all images in parallel
+  const fluxOptions = idea.aspect_ratio ? { aspectRatio: idea.aspect_ratio } : {};
   const imageResults = await Promise.all(
     content.imagePrompts.map(async (prompt) => {
       if (model === 'flux') {
-        return generateFluxImage(prompt);
+        return generateFluxImage(prompt, fluxOptions);
       } else {
         return generateImage(prompt);
       }
@@ -197,6 +251,39 @@ async function generatePreviewImages(idea) {
   });
 
   console.log(`[Preview] Done! ${publicUrls.length} images ready for idea #${idea.id}`);
+}
+
+async function regenerateSingleImage(idea, index, customPrompt) {
+  const { generateFluxImage } = await import('../services/fal.js');
+  const { generateImage } = await import('../services/grok.js');
+  const { uploadImage } = await import('../services/storage.js');
+
+  const model = idea.model || 'grok';
+  console.log(`[Regen] Idea #${idea.id} image ${index} (${model}): "${customPrompt.substring(0, 60)}..."`);
+
+  let result;
+  if (model === 'flux') {
+    const fluxOpts = idea.aspect_ratio ? { aspectRatio: idea.aspect_ratio } : {};
+    result = await generateFluxImage(customPrompt, fluxOpts);
+  } else {
+    result = await generateImage(customPrompt);
+  }
+
+  console.log(`[Regen] Uploading new image to R2...`);
+  const publicUrl = await uploadImage(result.imageUrl);
+
+  // Re-read preview URLs (in case anything changed) and swap in the new one
+  const fresh = getIdeaById(idea.id);
+  const previewUrls = JSON.parse(fresh.preview_urls || '[]');
+  previewUrls[index] = publicUrl;
+
+  updatePreviewStatus(idea.id, 'ready', {
+    previewUrls,
+    caption: fresh.caption,
+    script: fresh.script
+  });
+
+  console.log(`[Regen] Done for idea #${idea.id} image ${index}`);
 }
 
 async function postIdeaToInstagram(idea) {

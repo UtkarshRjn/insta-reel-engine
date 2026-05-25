@@ -110,7 +110,7 @@ async function pollForCompletion(requestId, maxAttempts = 180) {
 export async function generateImage(prompt, options = {}) {
   const {
     n = 1,
-    aspectRatio = '9:16' // vertical for Instagram posts
+    aspectRatio = '4:5' // Instagram feed posts require 0.8-1.91:1; 4:5 is tallest allowed. (Reels use 9:16.)
   } = options;
 
   console.log('Generating image with Grok Imagine...');

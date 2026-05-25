@@ -12,11 +12,20 @@ const MODEL_OPTIONS = {
   ]
 };
 
+// FLUX-supported ratios that also satisfy Instagram's 0.8–1.91 feed constraint
+const FLUX_ASPECT_RATIOS = [
+  { value: '1:1', label: '1:1 (Square — recommended for carousels)' },
+  { value: '4:3', label: '4:3 (Landscape)' },
+  { value: '3:2', label: '3:2 (Landscape)' },
+  { value: '16:9', label: '16:9 (Wide)' }
+];
+
 function QuickIdea() {
   const [prompt, setPrompt] = useState('');
   const [mediaType, setMediaType] = useState('video');
   const [model, setModel] = useState('grok');
   const [imageCount, setImageCount] = useState(1);
+  const [aspectRatio, setAspectRatio] = useState('1:1');
   const [scheduledDate, setScheduledDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState(null);
@@ -27,13 +36,16 @@ function QuickIdea() {
     if (type === 'video') setImageCount(1);
   };
 
+  const showAspectRatio = mediaType === 'image' && model === 'flux';
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!prompt.trim()) return;
 
     setSubmitting(true);
     try {
-      const idea = await addIdea(prompt.trim(), scheduledDate || undefined, mediaType, model, imageCount);
+      const ratioToSend = showAspectRatio ? aspectRatio : null;
+      const idea = await addIdea(prompt.trim(), scheduledDate || undefined, mediaType, model, imageCount, ratioToSend);
       setToast({ type: 'success', message: `Queued for ${idea.scheduled_date} (${model})` });
       setPrompt('');
       setScheduledDate('');
@@ -100,6 +112,20 @@ function QuickIdea() {
                 >{n}</button>
               ))}
             </div>
+          </div>
+        )}
+        {showAspectRatio && (
+          <div className="form-group">
+            <label>Aspect Ratio</label>
+            <select
+              value={aspectRatio}
+              onChange={(e) => setAspectRatio(e.target.value)}
+              disabled={submitting}
+            >
+              {FLUX_ASPECT_RATIOS.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
           </div>
         )}
         <div className="form-group">
