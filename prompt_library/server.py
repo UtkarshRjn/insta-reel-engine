@@ -46,12 +46,18 @@ def health():
 def ready():
     """Readiness probe. Validates that the service can actually serve a query.
 
-    Returns 503 (with detail) if any prerequisite is missing, so an orchestrator
-    won't route traffic to a misconfigured instance. Splits liveness vs readiness
-    on purpose: a 200 here means /inspire can succeed for the next request,
-    not just that the process is alive.
+    Hard-fails (503) only on conditions that would make every /inspire call fail:
+    missing OPENAI_API_KEY, index that can't be loaded, or zero usable entries.
+
+    Quarantined rows (e.g. from a partial rebuild or an embedding-model upgrade in
+    progress) are reported as warnings, NOT 503s, because retrieve.py is designed
+    to keep serving from the remaining valid entries. Failing readiness on any
+    rejected row would defeat the version-skew tolerance and turn a routine
+    migration into a full outage.
     """
     problems = []
+    warnings = []
+
     if not os.environ.get("OPENAI_API_KEY"):
         problems.append("OPENAI_API_KEY is not set")
 
@@ -62,12 +68,14 @@ def ready():
 
     if stats["entries"] == 0:
         problems.append("index has 0 usable entries — run build_index")
+
     if stats["rejected"] > 0:
-        problems.append(
-            f"{stats['rejected']} entries quarantined due to version mismatch — re-run build_index"
+        warnings.append(
+            f"{stats['rejected']} entries quarantined due to schema/version mismatch — "
+            "re-run build_index to clear them. /inspire still serves the valid rows."
         )
 
     if problems:
-        raise HTTPException(status_code=503, detail={"problems": problems, **stats})
+        raise HTTPException(status_code=503, detail={"problems": problems, "warnings": warnings, **stats})
 
-    return {"status": "ready", **stats}
+    return {"status": "ready", "warnings": warnings, **stats}
