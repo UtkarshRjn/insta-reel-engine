@@ -1,10 +1,10 @@
 [
   {
-    "image_url": "https://example.com/replace-with-real-viral-post-url-1.jpg",
+    "post_url": "https://www.instagram.com/p/REPLACE_WITH_REAL_SHORTCODE_1/",
     "notes": "Example: aesthetic travel portrait, golden hour, Bali"
   },
   {
-    "image_url": "https://example.com/replace-with-real-viral-post-url-2.jpg",
-    "notes": "Example: minimalist café flatlay, marble surface"
+    "post_url": "https://www.instagram.com/p/REPLACE_WITH_REAL_SHORTCODE_2/",
+    "notes": "Example: minimalist cafe flatlay, marble surface"
   }
 ]

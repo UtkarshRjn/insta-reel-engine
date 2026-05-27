@@ -1,99 +1,125 @@
-"""Pure retrieval: load index, embed a query, return top-k by cosine.
+"""Qdrant-backed dual-vector retrieval.
 
-Defends against version-skew: entries whose `embedding_model` or `embedding_dim` don't
-match the current configuration are quarantined and skipped rather than crashing the
-whole service. This way, one stale row from a previous embedding model never takes
-the retrieval API offline.
+A query gets embedded once (always as text — that's how callers will use this)
+and scored against either the text-side vectors, the image-side vectors, or a
+weighted fusion of both. Because jina-clip-v2 places text and image embeddings
+in the same space, text-vs-image cosine is meaningful.
+
+All results are filtered to `embedding_model == jina-clip-v2` so a stale row
+from a previous model never leaks into rankings.
 """
 
-import json
-from functools import lru_cache
+from __future__ import annotations
 
-import numpy as np
+from typing import Literal
 
-from .config import INDEX_PATH
-from .embed import EMBEDDING_DIM, EMBEDDING_MODEL, cosine_matrix, embed
+from qdrant_client.http import models as qm
 
-
-def _load_index_raw() -> list[dict]:
-    if not INDEX_PATH.exists():
-        return []
-    return json.loads(INDEX_PATH.read_text())
+from .embed import EMBEDDING_MODEL, embed_text
+from .store import count_current_model, count_total, search
 
 
-def _partition_entries(entries: list[dict]) -> tuple[list[dict], list[tuple[str, str]]]:
-    """Split entries into (valid, rejected) based on schema + version checks."""
-    valid: list[dict] = []
-    rejected: list[tuple[str, str]] = []
-    for e in entries:
-        url = e.get("image_url", "?")
-        vec = e.get("embedding")
-        if not isinstance(vec, list):
-            rejected.append((url, "missing or non-list embedding"))
-            continue
-        if e.get("embedding_model") != EMBEDDING_MODEL:
-            rejected.append((url, f"model mismatch ({e.get('embedding_model')!r} != {EMBEDDING_MODEL!r})"))
-            continue
-        if e.get("embedding_dim") != EMBEDDING_DIM:
-            rejected.append((url, f"dim mismatch ({e.get('embedding_dim')!r} != {EMBEDDING_DIM})"))
-            continue
-        if len(vec) != EMBEDDING_DIM:
-            rejected.append((url, f"vector length {len(vec)} != {EMBEDDING_DIM}"))
-            continue
-        valid.append(e)
-    return valid, rejected
+Mode = Literal["text", "image", "fused"]
 
 
-# Cache key includes mtime so the cache invalidates when the file changes on disk.
-@lru_cache(maxsize=1)
-def _load_index_cached(mtime_key: float):
-    raw = _load_index_raw()
-    valid, rejected = _partition_entries(raw)
-    matrix = (
-        np.array([e["embedding"] for e in valid], dtype=np.float32)
-        if valid
-        else np.zeros((0, EMBEDDING_DIM), dtype=np.float32)
-    )
-    return valid, matrix, rejected
+def _payload_filter(*, has_music: bool | None = None) -> qm.Filter | None:
+    must: list = []
+    if has_music is True:
+        must.append(qm.FieldCondition(key="has_music", match=qm.MatchValue(value=True)))
+    elif has_music is False:
+        must.append(qm.FieldCondition(key="has_music", match=qm.MatchValue(value=False)))
+    if not must:
+        return None
+    return qm.Filter(must=must)
 
 
-def _load_index():
-    if not INDEX_PATH.exists():
-        return [], np.zeros((0, EMBEDDING_DIM), dtype=np.float32), []
-    return _load_index_cached(INDEX_PATH.stat().st_mtime)
+def _format_hit(point: qm.ScoredPoint) -> dict:
+    p = point.payload or {}
+    return {
+        "score": float(point.score),
+        "post_url": p.get("post_url"),
+        "shortcode": p.get("shortcode"),
+        "media_index": p.get("media_index"),
+        "media_url": p.get("media_url"),
+        "prompt_text": p.get("prompt_text"),
+        "structured": p.get("structured"),
+        "caption": p.get("caption"),
+        "hashtags": p.get("hashtags") or [],
+        "music": {
+            "title": p.get("music_title"),
+            "artist": p.get("music_artist"),
+        } if p.get("has_music") else None,
+        "like_count": p.get("like_count"),
+        "comment_count": p.get("comment_count"),
+        "owner_username": p.get("owner_username"),
+        "posted_at": p.get("posted_at"),
+    }
 
 
-def retrieve_similar(query: str, k: int = 3) -> list[dict]:
+def retrieve_similar(
+    query: str,
+    k: int = 3,
+    mode: Mode = "fused",
+    image_weight: float = 0.5,
+    has_music: bool | None = None,
+) -> list[dict]:
+    """Return top-k posts ranked by similarity to `query`.
+
+    mode:
+      - "text"   — score against text-side vectors only
+      - "image"  — score against image-side vectors only (true visual retrieval)
+      - "fused"  — weighted blend; `image_weight` in [0, 1]
+
+    `has_music=True` restricts to posts where music_info was captured.
+    """
     if not query or not query.strip():
         return []
-    entries, matrix, _rejected = _load_index()
-    if not entries:
+    if k <= 0:
         return []
+    if mode == "fused" and not (0.0 <= image_weight <= 1.0):
+        raise ValueError("image_weight must be in [0, 1]")
 
-    query_vec = embed(query)
-    scores = cosine_matrix(query_vec, matrix)
-    top_idx = np.argsort(-scores)[:k]
+    query_vec = embed_text(query.strip())
+    extra = _payload_filter(has_music=has_music)
 
-    results = []
-    for i in top_idx:
-        e = entries[int(i)]
-        results.append({
-            "image_url": e["image_url"],
-            "prompt_text": e["prompt_text"],
-            "structured": e["structured"],
-            "notes": e.get("notes"),
-            "score": float(scores[int(i)]),
-        })
-    return results
+    if mode == "text":
+        hits = search(query_vec=query_vec, using="text", k=k, extra_filter=extra)
+        return [_format_hit(h) for h in hits]
+    if mode == "image":
+        hits = search(query_vec=query_vec, using="image", k=k, extra_filter=extra)
+        return [_format_hit(h) for h in hits]
+
+    # Fused: pull a larger candidate set from each, blend by point id, sort.
+    candidates = max(k * 4, 12)
+    text_hits = search(query_vec=query_vec, using="text", k=candidates, extra_filter=extra)
+    image_hits = search(query_vec=query_vec, using="image", k=candidates, extra_filter=extra)
+
+    by_id: dict[str, dict] = {}
+    for h in text_hits:
+        by_id[str(h.id)] = {"point": h, "text": h.score, "image": 0.0}
+    for h in image_hits:
+        if str(h.id) in by_id:
+            by_id[str(h.id)]["image"] = h.score
+        else:
+            by_id[str(h.id)] = {"point": h, "text": 0.0, "image": h.score}
+
+    blended = []
+    for row in by_id.values():
+        fused = image_weight * row["image"] + (1.0 - image_weight) * row["text"]
+        point = row["point"]
+        formatted = _format_hit(point)
+        formatted["score"] = fused
+        formatted["component_scores"] = {"text": row["text"], "image": row["image"]}
+        blended.append(formatted)
+
+    blended.sort(key=lambda r: r["score"], reverse=True)
+    return blended[:k]
 
 
 def index_stats() -> dict:
-    """Counts of valid + rejected entries plus the current expected embedding config."""
-    entries, _matrix, rejected = _load_index()
+    """Counts plus the embedding config currently expected by retrieval."""
     return {
-        "entries": len(entries),
-        "rejected": len(rejected),
-        "rejected_reasons": [{"image_url": u, "reason": r} for u, r in rejected[:10]],
+        "entries_current_model": count_current_model(),
+        "entries_total": count_total(),
         "embedding_model": EMBEDDING_MODEL,
-        "embedding_dim": EMBEDDING_DIM,
     }
