@@ -1,19 +1,24 @@
-"""FastAPI service exposing /inspire and /inspire/stats.
+"""FastAPI service for the prompt library.
 
 Run from repo root:
     uvicorn prompt_library.server:app --port 4001 --reload
 """
 
+from __future__ import annotations
+
 import os
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
+from .embed import EMBEDDING_MODEL
 from .retrieve import index_stats, retrieve_similar
+from .store import ping as qdrant_ping
 
-app = FastAPI(title="Inspiration Retrieval", version="0.1.0")
 
-# Allow the Vite dev server and the Node API to call this if/when we wire them up later.
+app = FastAPI(title="Inspiration Retrieval", version="0.2.0")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://localhost:3001"],
@@ -23,10 +28,23 @@ app.add_middleware(
 
 
 @app.get("/inspire")
-def inspire(prompt: str = Query(..., min_length=1), k: int = Query(3, ge=1, le=10)):
+def inspire(
+    prompt: str = Query(..., min_length=1),
+    k: int = Query(3, ge=1, le=20),
+    mode: Literal["text", "image", "fused"] = Query("fused"),
+    image_weight: float = Query(0.5, ge=0.0, le=1.0),
+    has_music: bool | None = Query(None, description="Filter to posts with audio metadata"),
+):
     try:
-        results = retrieve_similar(prompt, k)
-        return {"count": len(results), "results": results}
+        results = retrieve_similar(
+            prompt, k=k, mode=mode, image_weight=image_weight, has_music=has_music
+        )
+        return {
+            "count": len(results),
+            "mode": mode,
+            "image_weight": image_weight if mode == "fused" else None,
+            "results": results,
+        }
     except Exception as err:
         raise HTTPException(status_code=500, detail=str(err))
 
@@ -38,44 +56,52 @@ def stats():
 
 @app.get("/health")
 def health():
-    """Liveness probe. Process is up — no dependency checks."""
+    """Liveness probe — process is up, no dependency checks."""
     return {"status": "ok"}
 
 
 @app.get("/ready")
 def ready():
-    """Readiness probe. Validates that the service can actually serve a query.
+    """Readiness probe. 503s only when /inspire would definitely fail.
 
-    Hard-fails (503) only on conditions that would make every /inspire call fail:
-    missing OPENAI_API_KEY, index that can't be loaded, or zero usable entries.
+    Checks:
+      - OPENAI_API_KEY set (extractor needs it)
+      - JINA_API_KEY set (embedder needs it)
+      - QDRANT_URL set + collection reachable
+      - At least one point indexed under the current embedding model
 
-    Quarantined rows (e.g. from a partial rebuild or an embedding-model upgrade in
-    progress) are reported as warnings, NOT 503s, because retrieve.py is designed
-    to keep serving from the remaining valid entries. Failing readiness on any
-    rejected row would defeat the version-skew tolerance and turn a routine
-    migration into a full outage.
+    Quarantine semantics from Phase 1 carry over for free: Qdrant search is
+    already filtered to the current EMBEDDING_MODEL, so rows from a previous
+    model do not influence /inspire. They count toward `entries_total` but not
+    `entries_current_model`, and we only fail readiness on the latter.
     """
-    problems = []
-    warnings = []
+    problems: list[str] = []
+    warnings: list[str] = []
 
-    if not os.environ.get("OPENAI_API_KEY"):
-        problems.append("OPENAI_API_KEY is not set")
+    for key in ("OPENAI_API_KEY", "JINA_API_KEY", "QDRANT_URL"):
+        if not os.environ.get(key):
+            problems.append(f"{key} is not set")
 
+    qdrant_info: dict = {}
     try:
-        stats = index_stats()
+        qdrant_info = qdrant_ping()
     except Exception as err:
-        raise HTTPException(status_code=503, detail=f"index load failed: {err}")
+        problems.append(f"Qdrant ping failed: {err}")
 
-    if stats["entries"] == 0:
-        problems.append("index has 0 usable entries — run build_index")
-
-    if stats["rejected"] > 0:
-        warnings.append(
-            f"{stats['rejected']} entries quarantined due to schema/version mismatch — "
-            "re-run build_index to clear them. /inspire still serves the valid rows."
+    stats = index_stats()
+    if stats["entries_current_model"] == 0:
+        problems.append(
+            f"0 points stamped {EMBEDDING_MODEL} — run python -m prompt_library.build_index"
         )
 
-    if problems:
-        raise HTTPException(status_code=503, detail={"problems": problems, "warnings": warnings, **stats})
+    stale = stats["entries_total"] - stats["entries_current_model"]
+    if stale > 0:
+        warnings.append(
+            f"{stale} points exist from a previous embedding model — they are excluded "
+            "from /inspire. Re-run build_index or delete the collection to clear them."
+        )
 
-    return {"status": "ready", "warnings": warnings, **stats}
+    body = {**stats, "qdrant": qdrant_info, "warnings": warnings}
+    if problems:
+        raise HTTPException(status_code=503, detail={"problems": problems, **body})
+    return {"status": "ready", **body}
