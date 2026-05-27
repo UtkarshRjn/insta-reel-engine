@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { getIdeas, deleteIdea, retryIdea, generatePreview, postIdeaToInstagram } from '../services/api';
+import { getIdeas, deleteIdea, retryIdea, generatePreview, postIdeaToInstagram, regenerateImage } from '../services/api';
 
 const STATUS_COLORS = {
   pending: '#f59e0b',
@@ -13,6 +13,8 @@ function IdeaQueue() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState(null);
   const pollRef = useRef(null);
+  // Tracks the currently-open per-image editor: { ideaId, index, prompt }
+  const [editingImage, setEditingImage] = useState(null);
 
   const loadIdeas = async () => {
     try {
@@ -80,6 +82,23 @@ function IdeaQueue() {
   const handleRetry = async (id) => {
     try {
       await retryIdea(id);
+      loadIdeas();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const openImageEditor = (ideaId, index) => {
+    setEditingImage({ ideaId, index, prompt: '' });
+  };
+
+  const cancelImageEditor = () => setEditingImage(null);
+
+  const handleRegenerateImage = async () => {
+    if (!editingImage || !editingImage.prompt.trim()) return;
+    try {
+      await regenerateImage(editingImage.ideaId, editingImage.index, editingImage.prompt.trim());
+      setEditingImage(null);
       loadIdeas();
     } catch (err) {
       alert(err.message);
@@ -155,10 +174,51 @@ function IdeaQueue() {
                 {previewUrls.length > 0 && (
                   <div className="preview-thumbnails">
                     {previewUrls.map((url, i) => (
-                      <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                        <img src={url} alt={`Preview ${i + 1}`} className="preview-thumb" />
-                      </a>
+                      <div key={i} className="preview-thumb-wrap">
+                        <a href={url} target="_blank" rel="noopener noreferrer">
+                          <img src={url} alt={`Preview ${i + 1}`} className="preview-thumb" />
+                        </a>
+                        {idea.preview_status === 'ready' && idea.status === 'pending' && (
+                          <button
+                            type="button"
+                            className="thumb-edit-btn"
+                            onClick={() => openImageEditor(idea.id, i)}
+                            title="Regenerate this image with a custom prompt"
+                          >
+                            ✎
+                          </button>
+                        )}
+                      </div>
                     ))}
+                  </div>
+                )}
+
+                {/* Inline per-image regeneration editor */}
+                {editingImage && editingImage.ideaId === idea.id && (
+                  <div className="image-edit-panel">
+                    <label>
+                      Regenerate image #{editingImage.index + 1} with a new prompt
+                    </label>
+                    <textarea
+                      value={editingImage.prompt}
+                      onChange={(e) => setEditingImage({ ...editingImage, prompt: e.target.value })}
+                      placeholder="Describe how this image should change (outfit, pose, location detail, lighting…)"
+                      rows={3}
+                      autoFocus
+                    />
+                    <div className="image-edit-actions">
+                      <button
+                        type="button"
+                        className="btn-small btn-primary"
+                        onClick={handleRegenerateImage}
+                        disabled={!editingImage.prompt.trim()}
+                      >
+                        Regenerate
+                      </button>
+                      <button type="button" className="btn-small btn-outline" onClick={cancelImageEditor}>
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 )}
 

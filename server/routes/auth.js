@@ -3,7 +3,6 @@ import {
   getAuthUrl,
   exchangeCodeForToken,
   getLongLivedToken,
-  getInstagramAccountId,
   getUserProfile
 } from '../services/instagram.js';
 import { saveToken } from '../db.js';
@@ -32,17 +31,22 @@ router.get('/instagram/callback', async (req, res) => {
       return res.redirect(`${process.env.CLIENT_URL}?error=no_code`);
     }
 
-    // Exchange code for token
+    // Exchange code for short-lived token
     const tokenData = await exchangeCodeForToken(code);
 
-    // Get long-lived token
+    // Upgrade to long-lived token (60 days)
     const longLivedToken = await getLongLivedToken(tokenData.access_token);
 
-    // Get Instagram account ID
-    const { instagramAccountId, pageAccessToken } = await getInstagramAccountId(longLivedToken.access_token);
-
-    // Get user profile
-    const profile = await getUserProfile(pageAccessToken, instagramAccountId);
+    // Get user profile — IMPORTANT: use `user_id` (Graph ID like 17841...), not the
+    // app-scoped `id` (264...) returned by the token exchange. Only `user_id` works
+    // with the /media and /media_publish endpoints.
+    const profile = await getUserProfile(longLivedToken.access_token);
+    const resolvedAccountId = profile.user_id || profile.id;
+    if (!resolvedAccountId) {
+      console.error('OAuth callback: profile response missing user_id/id', profile);
+      return res.redirect(`${process.env.CLIENT_URL}?error=missing_account_id`);
+    }
+    const instagramAccountId = String(resolvedAccountId);
 
     // Generate session ID
     const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -51,7 +55,7 @@ router.get('/instagram/callback', async (req, res) => {
 
     // Store session in memory (for current UI session)
     sessions.set(sessionId, {
-      accessToken: pageAccessToken,
+      accessToken: longLivedToken.access_token,
       instagramAccountId,
       profile,
       expiresAt
@@ -61,7 +65,7 @@ router.get('/instagram/callback', async (req, res) => {
     saveToken({
       instagramAccountId,
       accessToken: longLivedToken.access_token,
-      pageAccessToken,
+      pageAccessToken: null,
       username: profile.username,
       expiresAt
     });

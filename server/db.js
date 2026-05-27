@@ -55,11 +55,12 @@ db.exec(`
 try { db.exec('ALTER TABLE ideas_queue ADD COLUMN image_count INTEGER DEFAULT 1'); } catch(e) {}
 try { db.exec('ALTER TABLE ideas_queue ADD COLUMN preview_urls TEXT'); } catch(e) {}
 try { db.exec('ALTER TABLE ideas_queue ADD COLUMN preview_status TEXT'); } catch(e) {}
+try { db.exec('ALTER TABLE ideas_queue ADD COLUMN aspect_ratio TEXT'); } catch(e) {}
 
 // --- Ideas Queue ---
 
 const stmtInsertIdea = db.prepare(`
-  INSERT INTO ideas_queue (prompt, media_type, model, scheduled_date, image_count) VALUES (?, ?, ?, ?, ?)
+  INSERT INTO ideas_queue (prompt, media_type, model, scheduled_date, image_count, aspect_ratio) VALUES (?, ?, ?, ?, ?, ?)
 `);
 
 const stmtGetNextPending = db.prepare(`
@@ -100,7 +101,7 @@ const stmtGetIdeaById = db.prepare(`
   SELECT * FROM ideas_queue WHERE id = ?
 `);
 
-export function addIdea(prompt, scheduledDate = null, mediaType = 'video', model = null, imageCount = 1) {
+export function addIdea(prompt, scheduledDate = null, mediaType = 'video', model = null, imageCount = 1, aspectRatio = null) {
   // Auto-assign model based on media type if not specified
   if (!model) {
     model = mediaType === 'image' ? 'grok' : 'grok';
@@ -120,7 +121,7 @@ export function addIdea(prompt, scheduledDate = null, mediaType = 'video', model
   }
 
   const count = mediaType === 'image' ? Math.min(Math.max(Number(imageCount) || 1, 1), 5) : 1;
-  const result = stmtInsertIdea.run(prompt, mediaType, model, scheduledDate, count);
+  const result = stmtInsertIdea.run(prompt, mediaType, model, scheduledDate, count, aspectRatio);
   return stmtGetIdeaById.get(result.lastInsertRowid);
 }
 

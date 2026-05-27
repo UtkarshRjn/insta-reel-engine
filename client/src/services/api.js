@@ -76,9 +76,10 @@ export function getInstagramLoginUrl() {
 
 // --- Queue API ---
 
-export async function addIdea(prompt, scheduledDate, mediaType = 'video', model = 'grok', imageCount = 1) {
+export async function addIdea(prompt, scheduledDate, mediaType = 'video', model = 'grok', imageCount = 1, aspectRatio = null) {
   const body = { prompt, mediaType, model, imageCount };
   if (scheduledDate) body.scheduledDate = scheduledDate;
+  if (aspectRatio) body.aspectRatio = aspectRatio;
 
   const response = await fetch(`${API_URL}/queue/ideas`, {
     method: 'POST',
@@ -109,6 +110,16 @@ export async function deleteIdea(id) {
 export async function generatePreview(id) {
   const response = await fetch(`${API_URL}/queue/ideas/${id}/generate-preview`, {
     method: 'POST'
+  });
+  if (!response.ok) throw new Error(await response.text());
+  return response.json();
+}
+
+export async function regenerateImage(id, index, prompt) {
+  const response = await fetch(`${API_URL}/queue/ideas/${id}/regenerate-image`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ index, prompt })
   });
   if (!response.ok) throw new Error(await response.text());
   return response.json();

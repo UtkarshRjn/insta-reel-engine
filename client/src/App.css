@@ -404,10 +404,74 @@ button:disabled {
   margin-top: 1rem;
 }
 
-.instagram-login p {
+.instagram-login-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
   margin-bottom: 0.75rem;
+}
+
+.instagram-login p {
+  margin-bottom: 0;
   color: rgba(255, 255, 255, 0.4);
   font-size: 0.8rem;
+}
+
+.info-icon {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 50%;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.info-icon:hover,
+.info-icon[aria-expanded="true"] {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.setup-help {
+  text-align: left;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.85rem;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.setup-help h4 {
+  margin: 0 0 0.5rem;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.setup-help ol {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.setup-help li strong {
+  display: block;
+  color: rgba(255, 255, 255, 0.95);
+  font-weight: 600;
+  margin-bottom: 0.15rem;
+}
+
+.setup-help li span {
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.4;
 }
 
 .btn-instagram {
@@ -826,6 +890,71 @@ button:disabled {
 .preview-thumb:hover {
   border-color: rgba(255, 255, 255, 0.25);
   transform: scale(1.03);
+}
+
+.preview-thumb-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.thumb-edit-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.7);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.preview-thumb-wrap:hover .thumb-edit-btn {
+  opacity: 1;
+}
+
+.thumb-edit-btn:hover {
+  background: rgba(0, 0, 0, 0.9);
+}
+
+.image-edit-panel {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+}
+
+.image-edit-panel label {
+  display: block;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 0.5rem;
+}
+
+.image-edit-panel textarea {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  color: #fff;
+  padding: 0.5rem;
+  font-size: 0.82rem;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.image-edit-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
 }
 
 .queue-caption-preview {

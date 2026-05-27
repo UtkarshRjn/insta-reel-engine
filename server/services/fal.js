@@ -22,7 +22,7 @@ const FLUX_API_URL = 'https://queue.fal.run/fal-ai/flux-pro/kontext';
 export async function generateFluxImage(prompt, options = {}) {
   const {
     referenceImageUrl = process.env.CHARACTER_REF_IMAGE_URL || null,
-    aspectRatio = '9:16'
+    aspectRatio = '1:1'
   } = options;
 
   console.log('Generating image with FLUX Kontext Pro...');
