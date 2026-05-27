@@ -104,6 +104,9 @@ router.post('/ideas/:id/regenerate-image', async (req, res) => {
     const idea = getIdeaById(id);
 
     if (!idea) return res.status(404).json({ error: 'Idea not found' });
+    if (idea.status !== 'pending') {
+      return res.status(409).json({ error: 'Cannot regenerate while idea is being posted or already completed' });
+    }
     if (idea.preview_status !== 'ready') {
       return res.status(400).json({ error: 'Preview must be ready first' });
     }
@@ -298,8 +301,10 @@ async function postIdeaToInstagram(idea) {
   }
 
   const accessToken = token.page_access_token || token.access_token;
-  const previewUrls = JSON.parse(idea.preview_urls);
-  const caption = idea.caption;
+  // Re-read after status flip so we publish whatever URLs are currently committed
+  const fresh = getIdeaById(idea.id) || idea;
+  const previewUrls = JSON.parse(fresh.preview_urls);
+  const caption = fresh.caption;
 
   let result;
   if (previewUrls.length > 1) {
@@ -313,7 +318,7 @@ async function postIdeaToInstagram(idea) {
   updateIdeaStatus(idea.id, 'completed', {
     videoUrl: previewUrls[0],
     caption,
-    script: idea.script,
+    script: fresh.script,
     instagramMediaId: result.id
   });
 

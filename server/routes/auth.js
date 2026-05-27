@@ -41,7 +41,12 @@ router.get('/instagram/callback', async (req, res) => {
     // app-scoped `id` (264...) returned by the token exchange. Only `user_id` works
     // with the /media and /media_publish endpoints.
     const profile = await getUserProfile(longLivedToken.access_token);
-    const instagramAccountId = String(profile.user_id);
+    const resolvedAccountId = profile.user_id || profile.id;
+    if (!resolvedAccountId) {
+      console.error('OAuth callback: profile response missing user_id/id', profile);
+      return res.redirect(`${process.env.CLIENT_URL}?error=missing_account_id`);
+    }
+    const instagramAccountId = String(resolvedAccountId);
 
     // Generate session ID
     const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
