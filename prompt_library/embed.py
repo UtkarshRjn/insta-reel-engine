@@ -5,7 +5,8 @@ from openai import OpenAI
 
 from .config import get_openai_client
 
-EMBEDDING_MODEL = "text-embedding-3-small"  # 1536-d
+EMBEDDING_MODEL = "text-embedding-3-small"
+EMBEDDING_DIM = 1536  # native dimensionality of text-embedding-3-small
 
 
 def embed(text: str) -> list[float]:
